@@ -1,0 +1,396 @@
+
+library("jenkins-pipeline-library") _
+
+pipeline 
+{
+  //agent { node { label 'base' } }
+  agent { node { label 'rits-appsec-prd' } }
+    environment {
+      				
+      
+      					def APPSEC_TEAM_EMAIL_ID = "gisp.appsec@prudential.com.sg"
+
+// ===========================================   Aquasec variables   ======================================
+			      	//PROD Aqua
+      					def AQUA_URL = "https://csec.aks-lb1-sgrtss-prd-az1-iqxcpu.pru.intranet.asia" 
+      				//UAT Aqua
+      					//def AQUA_URL = "https://csec.aks-lb1-sgrsss-uat-az1-tzbgb5.pru.intranet.asia"
+// ===========================================   Nexus variables   ========================================
+			      	//PROD Nexus
+      					def NEXUS_URL = "https://oss.pru.intranet.asia"
+      					def NEXUS_ONBOARDING_GUIDE_LINK = "https://collaborate.pruconnect.net/display/shareit/33534923/HHZ209dae8b42574e16bc2e1579fc9d9f2fGYC"
+      					def ROLE_ID = "1da70fae1fd54d6cb7999871ebdb9a36"
+      					def app_id_status = "unknown"
+      					//def APP_ID = "${LBU}-${Application}"
+      					def APPROVERS_LIST = "imtiyaz.shaik@prudential.com.sg,iris.liu@prudential.com.sg,johni.basha@prudential.com.sg,srinivaskancharla@prudential.com.sg,rajesh@prudential.com.my"
+// ===========================================   Fortify variables   ======================================
+      				 	//def FORTIFY_APP_NAME = "${LBU}-${Application}"
+      					//def FORTIFY_APP_VERSION = '1.0'
+	        	} // end of environment
+  
+/*  parameters {
+    
+  			stringParam("Application", "testapp" , "")
+            stringParam("Module", "testmodule${BUILD_NUMBER}", "")
+    
+  }
+  */
+
+/*
+  triggers {
+  	genericTrigger {  
+   		genericRequestVariables {
+    		genericRequestVariable {
+     			key("Application")
+     			regexpFilter("")
+      			key("Module")
+     			regexpFilter("")
+      			key("JIRA_TICKET_NO")
+     			regexpFilter("")
+      			key("requestor_email_id")
+     			regexpFilter("")
+    } // end of genericRequestVariable
+   } // end of genericRequestVariables
+  } // end of genericTrigger
+ } // end of triggers
+  */
+  
+/*options([
+  pipelineTriggers([
+   [$class: 'GenericTrigger',
+    genericRequestVariables: [
+     	[key: 'Application', regexpFilter: ''],
+     	[key: 'Module', regexpFilter: ''],
+    	[key: 'JIRA_TICKET_NO', regexpFilter: '']
+    ]  // end of genericRequestVariables
+    ] // end of class
+  ]) // end of pipelineTriggers
+ ]) // end of properties
+  */
+  
+  
+  
+stages 
+  {
+    
+    stage ('Nexus Create app-id') {
+      steps
+      {
+      	script
+        {
+        withCredentials([
+          					//usernamePassword(credentialsId: '76b28bb1-17ca-46ce-be5b-06eb8ad9a9fd', usernameVariable: 'NEXUS_API_USER', passwordVariable: 'NEXUS_API_PASS'),
+          					usernamePassword(credentialsId: 'a987b610-41c9-4827-8aec-24d17c25b19c', usernameVariable: 'NEXUS_API_USER', passwordVariable: 'NEXUS_API_PASS')	          
+                        ]) 
+			{
+          	
+              
+              sh '''
+              		#ROLE_ID="1cddabf7fdaa47d6833454af10e0a3ef"
+                    #ROLE_ID="1da70fae1fd54d6cb7999871ebdb9a36"
+                    echo "${LBU}"
+                    echo "${Application}"
+                    echo "${JIRA_TICKET_NO}"
+                    echo "${requestor_email_id}"
+                    APP_ID=${LBU}"-"${Application}
+                    echo $APP_ID
+                    
+                    echo '===================================================================================================================================='
+                    echo '===============================================   Get the app ID     =============================================================='
+                    echo '===================================================================================================================================='
+
+                    export response=$(curl -k -u ${NEXUS_API_USER}:${NEXUS_API_PASS} -X GET ${NEXUS_URL}/api/v2/applications?publicId=$APP_ID )
+                    echo $response
+
+                      if [ $response != '{"applications":[]}' ]
+                      then
+                      		echo '===================================================================================================================================='
+                            echo "The app-id already exists"
+                            echo "The app-id already exists">app_id_status_file.txt
+                            echo '===================================================================================================================================='
+                            echo "\n\n Hello ${requestor_email_id} \n\n As per the onboarding ticket ${JIRA_TICKET_NO} \n\n Nexus app-id is '$APP_ID' already exists. \n Kindly re-run the pipeline with different values.  \n\n For Any queries Kindly contact ${APPSEC_TEAM_EMAIL_ID}  \n\n Thanks, \n\n AppSec Team">emailBodyFile.txt
+                            echo "FAILURE: the app-id '$APP_ID' already exists">emailSubjectFile.txt
+                            #echo "FAILURE">currentBuildResultFile.txt
+                            
+                      else
+                      		echo '===================================================================================================================================='
+                            echo "app-id does not exist. OK to proceed"
+                            echo "app-id does not exist. OK to proceed">app_id_status_file.txt
+                            echo '===================================================================================================================================='
+						fi
+                        '''
+              		app_id_status = readFile("app_id_status_file.txt")
+              
+/*    Approval email trigger not required - 
+
+					def approvalUrl = env.BUILD_URL + 'input'
+             		def approvalEmailBody = "\n\n Hello AppSec Team Member, \n\n Kindly approve this nexus app id creation pipeline run:$APP_ID \n\n Current status: ${app_id_status} \n\n ${approvalUrl} \n\n For Any queries Kindly contact ${APPSEC_TEAM_EMAIL_ID}  \n\n Thanks, \n\n AppSec Team"
+                	mail(
+               			to: "${APPROVERS_LIST}",
+               			subject: "Nexus app id creation - Approval Required",
+               			body: "${approvalEmailBody}"
+               	 		)
+              			input 	(
+                          			message: "Waiting for approval from AppSec Team : ${APPROVERS_LIST} ",
+                          			submitter: "${APPROVERS_LIST}"
+                          		)
+*/
+//==================================================================================================================================================================================================================
+              		sh '''
+                    		echo "${app_id_status}"
+                            APP_ID=${LBU}"-"${Application}
+                            cat app_id_status_file.txt
+              				#if [ "${app_id_status}" != "The app-id already exists" ]
+                            if [ $(cat app_id_status_file.txt | grep -c 'OK') == '1' ]
+                     		then
+                                    echo '===================================================================================================================================='
+                                    echo '===============================================   Get the ORG ID     ==============================================================='
+                                    echo '===================================================================================================================================='
+
+                                    export orgid=$(curl -k -u ${NEXUS_API_USER}:${NEXUS_API_PASS} -X GET ${NEXUS_URL}/api/v2/organizations | jq -r '.' | grep -B 1 ${LBU} | grep -m 1 id | xargs | cut -d " " -f 2 | cut -d "," -f 1)
+                                    echo ${orgid}
+
+                                    #export orgid=$(curl -k -u ${NEXUS_API_USER}:${NEXUS_API_PASS} -X GET ${NEXUS_URL}/api/v2/organizations | jq -r 'if .organizations[].name == "test" then')
+                                    #echo ${orgid}
+
+                                    echo '===================================================================================================================================='
+                                    echo '===============================================   Create an app-id     ============================================================='
+                                    echo '===================================================================================================================================='
+
+                                    curl -k \
+                                                -u ${NEXUS_API_USER}:${NEXUS_API_PASS} \
+                                                -X POST -H "Content-Type: application/json" \
+                                                -d '{"publicId": "'$APP_ID'","name": "'$APP_ID'","organizationId":"'${orgid}'","contactUserName":"'${NEXUS_API_USER}'","applicationTags": [{"tagId":"cfc9bbddd5354e75afc4fdb2fa8394a3"}]}' \
+                                                ${NEXUS_URL}/api/v2/applications
+                                    #cat status.txt
+                                    echo '================================================================================'
+                                    echo "created app id is:  "$APP_ID
+                                    echo '================================================================================'
+
+                                    echo '===================================================================================================================================='
+                                    echo '===============================================   Get the app ID     =============================================================='
+                                    echo '===================================================================================================================================='
+
+                                    export APP_ID_NO=$(curl -k -u ${NEXUS_API_USER}:${NEXUS_API_PASS} -X GET ${NEXUS_URL}/api/v2/applications?publicId=$APP_ID | jq -r '.applications[].id')
+
+                                    #echo '===================================================================================================================================='
+                                    #echo '===============================================  Assign access to user ============================================================='
+                                    #echo '===================================================================================================================================='
+
+                                    #curl -k \
+                                    #            -u ${NEXUS_API_USER}:${NEXUS_API_PASS} \
+                                    #            -X PUT -H "Content-Type: application/json" \
+                                    #             ${NEXUS_URL}/api/v2/roleMemberships/application/$APP_ID_NO/role/${ROLE_ID}/user/${PRUASIA_ID}
+
+                                    #echo '===================================================================================================================================='
+                                    #echo '===============================================   Get the app ID     ==============================================================='
+                                    #echo '===================================================================================================================================='
+
+                                    #export id=$(curl -k -u ${NEXUS_API_USER}:${NEXUS_API_PASS} -X GET ${NEXUS_URL}/api/v2/applications?publicId=testapp3 | jq -r '.applications[].id')
+                                    #echo ${id}
+
+                                    echo "\n\n Hello ${requestor_email_id} \n\n As per the onboarding ticket ${JIRA_TICKET_NO} \n\n Nexus app-id '$APP_ID' has been created  \n\n Kindly refer this page for Nexus Self-Onboarding steps : ${NEXUS_ONBOARDING_GUIDE_LINK}  \n\n Kindly raise an IAMPRU request to get access to the nexus reports : https://iam.pru.intranet.asia  \n\n For Any queries Kindly contact ${APPSEC_TEAM_EMAIL_ID}  \n\n Thanks, \n\n AppSec Team">emailBodyFile.txt
+                                    echo "SUCCESS: Nexus app-id '$APP_ID' has been created">emailSubjectFile.txt
+                                    #echo "SUCCESS">currentBuildResultFile.txt
+                         fi   
+              '''
+              emailBody =  readFile("emailBodyFile.txt")
+              emailSubject = readFile("emailSubjectFile.txt")
+              //currentBuild.result = readFile("currentBuildResultFile.txt")
+            //emailBody = "\n\n Hello ${requestor_email_id} \n\n As per the onboarding ticket${JIRA_TICKET_NO} \n\n Nexus app-id is '$APP_ID' has been created  \n\n Kindly refer this page for Nexus Self-Onboarding steps : ${NEXUS_ONBOARDING_GUIDE_LINK}  \n\n ${PRUASIA_ID} has been granted access to the application \n\n For Any queries Kindly contact ${APPSEC_TEAM_EMAIL_ID}  \n\n Thanks, \n\n AppSec Team"
+             mail(
+               			to: "${APPROVERS_LIST},${requestor_email_id}",
+               			subject: "${JIRA_TICKET_NO}: ${emailSubject}",
+               			body: "${emailBody}"
+               	 )		
+                        //mime: "text/html");
+              
+        	} //end of withCredentials
+        } //end of script
+      } //end of steps
+    } // end of stage Nexus
+
+/*    
+    stage('Creating Application in fortify') {
+      steps 
+      {
+        script
+        {
+        withCredentials([  //Artifactory token for sast repo
+                           //usernamePassword(credentialsId: '1c22852f-b4af-464b-bb10-708309f2d05d', usernameVariable: 'Arti_User', passwordVariable: 'Arti_Token' ),
+                           // Artifactory token for csec repo
+                           //string(credentialsId: 'c1e6eac3-fed7-4387-a184-ca8ab7702703', variable: 'Artifactory_Token'),
+                           //string(credentialsId: 'eade06a1-c75e-4a39-9e00-f88c26af9a20', variable: 'Artifactory_Token_debian_appsec'),
+          				   string(credentialsId: '4ba30713-28cf-48de-ae8e-a0374c0a5dcb', variable: 'Fortify_SSC_Token'),
+                           usernamePassword(credentialsId: '1d973ccb-9a3d-4f77-a773-fbdc791b613f', usernameVariable: 'Proxy_User', passwordVariable: 'Proxy_Pass' )
+                        
+                        ]) 
+		{
+        sh '''
+        
+#====================================================================================================================        
+# List applications  
+#====================================================================================================================       
+ 				#curl -vk GET "https://sast.pru.intranet.asia/ssc/api/v1/projects?start=0&limit=200&fulltextsearch=false" \
+                # 		 -H "accept: application/json" \
+                #        -H "Authorization: FortifyToken "${Fortify_SSC_Token}    
+#====================================================================================================================        
+# Create and application   
+#====================================================================================================================
+				curl -vk -X POST "https://sast.pru.intranet.asia/ssc/api/v1/projectVersions" \
+                		-H "accept: application/json" \
+                        -H "Authorization: FortifyToken "${Fortify_SSC_Token} \
+                        -H "Content-Type: application/json" \
+                        -d '{"name":"'${FORTIFY_APP_VERSION}'","description":"","active":true,"committed":false,"project":{"name":"'${FORTIFY_APP_NAME}'","description":"","issueTemplateId":"529e83e7-2ea1-4517-b6eb-9d697c8dc5b3"},"issueTemplateId":"529e83e7-2ea1-4517-b6eb-9d697c8dc5b3"}' >response.txt
+                export id=$(cat response.txt | grep performance | cut -d'/' -f 8)
+                
+
+                
+                curl -vk -X POST "https://sast.pru.intranet.asia/ssc/api/v1/bulk" \
+                		-H "accept: application/json" \
+                        -H "Authorization: FortifyToken "${Fortify_SSC_Token} \
+                        -H "Content-Type: application/json" \
+                        -d '{"requests":[{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'/attributes","httpVerb":"PUT","postData":[{"attributeDefinitionId":11,"values":[{"guid":"5194f66a-b51b-4e4f-8fef-e1ce40b65993"}],"value":null}]},{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'/authEntities","httpVerb":"PUT","postData":[]},{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'/responsibilities","httpVerb":"PUT","postData":[{"responsibilityGuid":"projectmanager","userId":null},{"responsibilityGuid":"securitychampion","userId":null},{"responsibilityGuid":"developmentmanager","userId":null}]},{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'/action","httpVerb":"POST","postData":[{"type":"COPY_FROM_PARTIAL","values":{"projectVersionId":'${id}',"previousProjectVersionId":-1,"copyAnalysisProcessingRules":true,"copyBugTrackerConfiguration":true,"copyCurrentStateFpr":false,"copyCustomTags":true}}]},{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'?hideProgress=true","httpVerb":"PUT","postData":{"committed":true}},{"uri":"https://sast.pru.intranet.asia/ssc/api/v1/projectVersions/'${id}'/action","httpVerb":"POST","postData":[{"type":"COPY_CURRENT_STATE","values":{"projectVersionId":'${id}',"previousProjectVersionId":-1,"copyCurrentStateFpr":false}}]}]}'
+                             
+			'''
+        email.send(to: 'aakash.khadke@prudential.com.sg,chong.sheng.goh@prudential.com.my,Mohan.Yelnadu@prudential.com.sg,nikhil.nagesh.chodankar@prudential.com.my',
+                   subject: '${JIRA_TICKET_NO}: Fortify Application created',
+                   body: 'Fortify App name created with name: ${LBU}-${Application} and version: ${FORTIFY_APP_VERSION}',
+                   mime: 'text/html');
+       } // end of withcredentials
+      } // end of script
+     } // end of steps  
+	} // end of stage Creating Application in fortify
+    */
+    
+    
+    /*
+    stage('Aqua Create registry - Create Scope - Create User - Create Role - Assign User to the role/scope/registry') {
+      steps 
+      {
+        script
+        {
+        withCredentials([
+          				usernamePassword(credentialsId: 'caad38cf-4e75-4fd4-8264-cf2ce688f6d6', usernameVariable: 'AQUA_API_USER', passwordVariable: 'AQUA_API_PASS'),
+                        usernamePassword(credentialsId: '	436c33c0-02b8-4d68-90fd-0ea93ff33c87', usernameVariable: 'art_user', passwordVariable: 'art_token_global'),
+          				string(credentialsId: 'c1e6eac3-fed7-4387-a184-ca8ab7702703', variable: 'Artifactory_CSEC_repo_Token')
+                        ]) 
+		{
+          //env.username = input message: 'Kindly enter the username', ok: '', parameters: [string(defaultValue: '', description: '', name: 'Kindly enter the username')]
+          //env.role = input message: 'Kindly enter the role', ok: '', parameters: [string(defaultValue: '', description: '', name: 'Kindly enter the role')];
+                            
+        sh '''
+
+              echo '====================================================================================================================================='
+              echo '===============================================   Authentication      ==============================================================='
+              echo '====================================================================================================================================='
+              set +x
+              export token=$(curl -k 																												\
+              -X POST -H "Content-Type: application/json"																			\
+              --data '{ "id": "'$AQUA_API_USER'", "password": "'$AQUA_API_PASS'" }'													\
+              ${AQUA_URL}/api/v1/login | jq -r '.token')
+
+
+              echo '===================================================================================================================================='
+              echo '==========================================      User Creation       ================================================================'
+              echo '====================================================================================================================================' 
+              #USER CREATION
+              set +x
+              curl -k 																												\
+              	-u ${AQUA_API_USER}:${AQUA_API_PASS} 																				\
+              	-X POST -H "Content-Type: application/json" 																			\
+              	--data '{"id": "'${requestor_email_id}'","name": "'${requestor_email_id}'","password": "Changeme@123","role": "BasicRole"}' 			\
+              	${AQUA_URL}/api/v1/users
+              
+              
+              echo '===================================================================================================================================='
+              echo '===============================================      Create Image Registry     ====================================================='
+              echo '===================================================================================================================================='
+
+              curl -k 					\
+  			  	--request POST ${AQUA_URL}/api/v1/registries			\
+  			  	--header 'Authorization: Bearer '${token} 	\
+  			  	--header 'Content-Type: application/json' 		\
+                --data-raw '{"name":"'${artifactory_docker_repo_name}'","type":"ART","url":"https://'${artifactory_docker_repo_name}'.pruregistry.intranet.asia:8443","username":"'${art_user}'","password":"'${art_token_global}'"}'
+              
+              echo '===================================================================================================================================='
+              echo '===============================================      Create Application Scope     =================================================='
+              echo '===================================================================================================================================='
+
+              curl -k					\
+  			  	--request POST ${AQUA_URL}/api/v2/access_management/scopes			\
+  			  	--header 'Authorization: Bearer '${token} 	\
+  			  	--header 'Content-Type: application/json' 		\
+                --data '{"name":"'${artifactory_docker_repo_name}'","description":"'${artifactory_docker_repo_name}'","author":"'${AQUA_API_USER}'","categories":{"artifacts":{"image":{"expression":"v1","variables":[{"attribute":"aqua.registry","value":"'${artifactory_docker_repo_name}'"}]},"function":{"expression":"","variables":[]},"pas_droplet":{"expression":"","variables":[]}},"workloads":{"kubernetes":{"expression":"","variables":[]},"no_orc":{"expression":"","variables":[]},"pas":{"expression":"","variables":[]}},"infrastructure":{"kubernetes":{"expression":"","variables":[]},"host":{"expression":"","variables":[]}}}}'
+              
+ 				echo '===================================================================================================================================='
+              	echo '===============================================      Create  Role      ============================================================='
+              	echo '===================================================================================================================================='
+
+              	curl -k					\
+  			  		--request POST ${AQUA_URL}/api/v2/access_management/roles			\
+  			  		--header 'Authorization: Bearer '${token} 	\
+  			  		--header 'Content-Type: application/json' 		\
+                	--data '{"scopes":["'${artifactory_docker_repo_name}'"],"users":["'${requestor_email_id}'"],"name":"'${artifactory_docker_repo_name}'","description":"'${artifactory_docker_repo_name}'","permission":"BasicRole"}'
+              
+              echo '===================================================================================================================================='
+              echo '==========================================      Role assignment       =============================================================='
+              echo '====================================================================================================================================' 
+              	set +x
+              	curl -k 																												\
+              		-u ${AQUA_API_USER}:${AQUA_API_PASS} 																				\
+              		-X PUT -H "Content-Type: application/json" 																			\
+              		--data '{"id":"'${requestor_email_id}'","name":"'${requestor_email_id}'","email":"'${requestor_email_id}'","role":"'${artifactory_docker_repo_name}'","first_time":false,"is_super":false,"ui_access":false,"actions":null}' 			\
+              		${AQUA_URL}/api/v1/users/${requestor_email_id}
+              
+              #echo '===================================================================================================================================='
+              #echo '=============================================      List users      ================================================================='
+              #echo '====================================================================================================================================' 
+              
+              #curl -k 																												\
+              #-u ${AQUA_API_USER}:${AQUA_API_PASS} 																					\
+              #-X GET -H "Content-Type: application/json" 																			\
+              #${AQUA_URL}/api/v1/users | jq -r '.[].id'
+              
+              
+              #echo '===================================================================================================================================='
+              #echo '=============================================      List Roles      ================================================================='
+              #echo '====================================================================================================================================' 
+              
+              #curl -k --request GET 							\
+  			  #	--url ${AQUA_URL}'/api/v2/roles?order_by=name&pagesize=100'				\
+  			  #	--header 'accept: application/json' 		\
+  			  #	--header 'Authorization: Bearer '${token} | jq -r '.result[].name'	
+
+'''
+          } // end of withCredentials
+        }  // end of script
+      } //  end of steps
+	}  //end of stage Aquasec
+    */ 
+
+  }  // end of stages
+  
+    post {
+        failure 
+        {
+            // in case of failure, we'd like to have simple 'git blame' on build history :)
+          script
+          {
+            currentBuild.displayName = "${JIRA_TICKET_NO}-${emailSubject}"
+          } // end of script
+        } // end of failure
+
+        success
+        {
+            // in case of failure, we'd like to have simple 'git blame' on build history :)
+          script
+          {
+            currentBuild.displayName = "${JIRA_TICKET_NO}-${emailSubject}" 
+          } // end of script
+        } // end of success
+              
+
+    
+    } // END OF POST
+} // end of pipeline
