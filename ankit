@@ -1,0 +1,42 @@
+name: DAST-SVD Onboarding Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  dast_svd_onboarding:
+    runs-on: pru-gisp-all-nprd-linux-runner-01
+    env:
+      APP-NAME: GwISP-ctly-security
+      URL: https://sample-vmapi.aks-lb1-sgrsss-uat-az1-tzbgb5.pru.intranet.asia
+      config: Pru_Audit_Policy
+    steps:
+      - name: DAST-Security-Burp-Onboarding
+        run: |
+          echo "=================================================="
+          echo "========--- DAST - Burp Scan: Start ---========"
+          echo "=================================================="
+          
+          curl -k -w "\n" -X POST https://dast/api/${{ secrets.DASTAPIKEY }}/v0.1/scan -d '{"name":"${{ env.APP_NAME }}","scan_configurations":[{"name":"${{ env.config }}","type":"NamedConfiguration"}],"urls":["${{ env.URL }}"]}' -D headers.txt
+          cat headers.txt
+          
+          if grep -q "201 Created" headers.txt; then
+            echo "SUCCESS: DAST Onboarding for App-id - ${{ env.APP_NAME }} is completed" >> emailbody.txt
+          else
+            echo "FAILURE: DAST Onboarding for App-id - ${{ env.APP_NAME }} failed with errors" >> emailbody.txt
+            exit 1
+          fi
+          
+          echo "=================================================="
+          echo "========--- DAST - Burp Scan: End ---========"
+          echo "=================================================="
+
+      - name: End Workflow
+        if: ${{ always() }}
+        run: echo "Workflow completed."

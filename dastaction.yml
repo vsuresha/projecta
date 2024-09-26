@@ -1,0 +1,20 @@
+name: Call DAST-SVD Onboarding Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  call_dast_svd_onboarding:
+    uses: ./.github/workflows/dast-svd-onboarding.yml
+    with:
+      app_name: GwISP-ctly-security
+      url: https://sample-vmapi.aks-lb1-sgrsss-uat-az1-tzbgb5.pru.intranet.asia
+      config: Pru_Audit_Policy
+    secrets:
+      DASTAPIKEY: ${{ secrets.DASTAPIKEY }}
